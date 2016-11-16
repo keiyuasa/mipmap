@@ -1,0 +1,2 @@
+# mipmap
+WebGL mipmap
