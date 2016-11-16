@@ -42,7 +42,7 @@
   var len=2.0;
   var diff=0.01;
   var minLen=0.1;
-  var maxLen=7.0;
+  var maxLen=10.0;
 
   function setLength() {
     verts = [
@@ -76,7 +76,6 @@
     var texCoordBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
     var textureCoords = [
-      // Front face
       0.0, 0.0,
       1.0, 0.0,
       1.0, 1.0,
@@ -85,7 +84,6 @@
 
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoords), gl.STATIC_DRAW);
 
-    // Index data (defines the triangles to be drawn)
     var squareIndexBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, squareIndexBuffer);
     var squareIndices = [
@@ -200,7 +198,6 @@
       gl.clearColor(0.3, 0.3, 0.3, 1.0);
       gl.enable(gl.DEPTH_TEST);
       gl.clear(gl.COLOR_BUFFER_BIT  | gl.DEPTH_BUFFER_BIT);
-
       gl.useProgram(shaderProgram);
 
       gl.bindBuffer(gl.ARRAY_BUFFER, obj.buffer);
@@ -208,15 +205,11 @@
       gl.bindBuffer(gl.ARRAY_BUFFER, obj.texCoordBuffer);
       gl.vertexAttribPointer(shaderTexCoordAttribute, obj.texCoordSize, gl.FLOAT, false, 0, 0);
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, obj.indices);
-
       gl.uniformMatrix4fv(shaderProjectionMatrixUniform, false, projectionMatrix);
       gl.uniformMatrix4fv(shaderModelViewMatrixUniform, false, modelViewMatrix);
-
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, webGLTexture);
       gl.uniform1i(shaderSamplerUniform, 0);
-
-      // draw the object
       gl.drawElements(obj.primtype, obj.nIndices, gl.UNSIGNED_SHORT, 0);
     }
 
@@ -269,6 +262,6 @@
 
   <body>
     <canvas id="webglcanvas" style="border: none;" width="500" height="500"></canvas>
-    <p>Use mouse wheel to zoom up/down</p>
+    <p>Use your mouse wheel to zoom up/down</p>
   </body>
   </html>
