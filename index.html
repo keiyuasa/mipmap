@@ -1,0 +1,274 @@
+<html>
+
+<head>
+  <title>Programming WebGL Mipmap</title>
+  <meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+  <script src="js/jquery-1.11.3.min.js"></script>
+  <script src="js/gl-matrix-min.js"></script>
+  <script src="js/RequestAnimationFrame.js"></script>
+  <script type="text/javascript">
+  function initWebGL(canvas) {
+    var gl = null;
+    var msg = "Your browser does not support WebGL, " +
+    "or it is not enabled by default.";
+    try
+    {
+      gl = canvas.getContext("experimental-webgl");
+    }
+    catch (e)
+    {
+      msg = "Error creating WebGL Context!: " + e.toString();
+    }
+
+    if (!gl)
+    {
+      alert(msg);
+      throw new Error(msg);
+    }
+
+    return gl;
+  }
+
+  function initViewport(gl, canvas)
+  {
+    gl.viewport(0, 0, canvas.width, canvas.height);
+  }
+
+  var projectionMatrix, modelViewMatrix;
+  var rotationAxis;
+  var mouseOn = false;
+
+  var verts = [];
+  var len=2.0;
+  var diff=0.01;
+  var minLen=0.1;
+  var maxLen=7.0;
+
+  function setLength() {
+    verts = [
+      // Front face
+      -len, -len,  1.0,
+      len, -len,  1.0,
+      len,  len,  1.0,
+      -len,  len,  1.0
+    ];
+  }
+
+  setLength();
+
+  function initMatrices(canvas)
+  {
+    modelViewMatrix = mat4.create();
+    mat4.translate(modelViewMatrix, modelViewMatrix, [0, 0, -8]);
+
+    projectionMatrix = mat4.create();
+    mat4.perspective(projectionMatrix, Math.PI / 4, canvas.width / canvas.height, 1, 10000);
+
+    rotationAxis = vec3.create();
+    vec3.normalize(rotationAxis, [1, 1, 1]);
+  }
+
+  function createSquare(gl) {
+    var vertexBuffer;
+    vertexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.STATIC_DRAW);
+    var texCoordBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+    var textureCoords = [
+      // Front face
+      0.0, 0.0,
+      1.0, 0.0,
+      1.0, 1.0,
+      0.0, 1.0
+    ];
+
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoords), gl.STATIC_DRAW);
+
+    // Index data (defines the triangles to be drawn)
+    var squareIndexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, squareIndexBuffer);
+    var squareIndices = [
+      0, 1, 2, 0, 2, 3
+    ];
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(squareIndices), gl.STATIC_DRAW);
+
+    var square = {buffer:vertexBuffer, texCoordBuffer:texCoordBuffer, indices:squareIndexBuffer,
+      vertSize:3, nVerts:4, texCoordSize:2, nTexCoords: 4, nIndices:6, primtype:gl.TRIANGLES};
+
+      return square;
+    }
+
+    function createShader(gl, str, type) {
+      var shader;
+      if (type == "fragment") {
+        shader = gl.createShader(gl.FRAGMENT_SHADER);
+      } else if (type == "vertex") {
+        shader = gl.createShader(gl.VERTEX_SHADER);
+      } else {
+        return null;
+      }
+
+      gl.shaderSource(shader, str);
+      gl.compileShader(shader);
+
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        alert(gl.getShaderInfoLog(shader));
+        return null;
+      }
+
+      return shader;
+    }
+
+    var vertexShaderSource =
+
+    "    attribute vec3 vertexPos;\n" +
+    "    attribute vec2 texCoord;\n" +
+    "    uniform mat4 modelViewMatrix;\n" +
+    "    uniform mat4 projectionMatrix;\n" +
+    "    varying vec2 vTexCoord;\n" +
+    "    void main(void) {\n" +
+    "		// Return the transformed and projected vertex value\n" +
+    "        gl_Position = projectionMatrix * modelViewMatrix * \n" +
+    "            vec4(vertexPos, 1.0);\n" +
+    "        // Output the texture coordinate in vTexCoord\n" +
+    "        vTexCoord = texCoord;\n" +
+    "    }\n";
+
+    var fragmentShaderSource =
+    "    precision mediump float;\n" +
+    "    varying vec2 vTexCoord;\n" +
+    "    uniform sampler2D uSampler;\n" +
+    "    void main(void) {\n" +
+    "    // Return the pixel color: always output white\n" +
+    "    gl_FragColor = texture2D(uSampler, vec2(vTexCoord.s, vTexCoord.t));\n" +
+    "}\n";
+
+
+    var shaderProgram, shaderVertexPositionAttribute, shaderVertexColorAttribute,
+    shaderProjectionMatrixUniform, shaderModelViewMatrixUniform, shaderSamplerUniform;
+
+    function initShader(gl) {
+      var fragmentShader = createShader(gl, fragmentShaderSource, "fragment");
+      var vertexShader = createShader(gl, vertexShaderSource, "vertex");
+
+      shaderProgram = gl.createProgram();
+      gl.attachShader(shaderProgram, vertexShader);
+      gl.attachShader(shaderProgram, fragmentShader);
+      gl.linkProgram(shaderProgram);
+
+      shaderVertexPositionAttribute = gl.getAttribLocation(shaderProgram, "vertexPos");
+      gl.enableVertexAttribArray(shaderVertexPositionAttribute);
+
+      shaderTexCoordAttribute = gl.getAttribLocation(shaderProgram, "texCoord");
+      gl.enableVertexAttribArray(shaderTexCoordAttribute);
+
+      shaderProjectionMatrixUniform = gl.getUniformLocation(shaderProgram, "projectionMatrix");
+      shaderModelViewMatrixUniform = gl.getUniformLocation(shaderProgram, "modelViewMatrix");
+      shaderSamplerUniform = gl.getUniformLocation(shaderProgram, "uSampler");
+
+      if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+        alert("Could not initialise shaders");
+      }
+    }
+
+    var okToRun = false;
+
+    function handleTextureLoaded(gl, texture) {
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, texture.image);
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.bindTexture(gl.TEXTURE_2D, null);
+      okToRun = true;
+    }
+
+    var webGLTexture;
+
+    function initTexture(gl) {
+      webGLTexture = gl.createTexture();
+      webGLTexture.image = new Image();
+      webGLTexture.image.onload = function () {
+        handleTextureLoaded(gl, webGLTexture)
+      }
+      webGLTexture.image.src = "img/globe_west_2048.jpg";
+    }
+
+    function draw(gl, obj) {
+      gl.clearColor(0.3, 0.3, 0.3, 1.0);
+      gl.enable(gl.DEPTH_TEST);
+      gl.clear(gl.COLOR_BUFFER_BIT  | gl.DEPTH_BUFFER_BIT);
+
+      gl.useProgram(shaderProgram);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, obj.buffer);
+      gl.vertexAttribPointer(shaderVertexPositionAttribute, obj.vertSize, gl.FLOAT, false, 0, 0);
+      gl.bindBuffer(gl.ARRAY_BUFFER, obj.texCoordBuffer);
+      gl.vertexAttribPointer(shaderTexCoordAttribute, obj.texCoordSize, gl.FLOAT, false, 0, 0);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, obj.indices);
+
+      gl.uniformMatrix4fv(shaderProjectionMatrixUniform, false, projectionMatrix);
+      gl.uniformMatrix4fv(shaderModelViewMatrixUniform, false, modelViewMatrix);
+
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, webGLTexture);
+      gl.uniform1i(shaderSamplerUniform, 0);
+
+      // draw the object
+      gl.drawElements(obj.primtype, obj.nIndices, gl.UNSIGNED_SHORT, 0);
+    }
+
+    function run(gl, square) {
+      requestAnimationFrame(function() { run(gl, square); });
+      if (okToRun)
+      {
+        setLength();
+        draw(gl, square);
+      }
+    }
+
+    function mouseWheel(e) {
+      var d= e.wheelDelta;
+      var d1=d/120*diff;
+      len += d1;
+      if(len<minLen) len=minLen;
+      if(len>maxLen) len=maxLen;
+      setLength();
+
+      var canvas = document.getElementById("webglcanvas");
+      var gl = initWebGL(canvas);
+      initViewport(gl, canvas);
+      initMatrices(canvas);
+      var square = createSquare(gl);
+      initShader(gl);
+      initTexture(gl);
+      run(gl, square);
+    }
+
+    $(document).ready(
+      function() {
+        var canvas = document.getElementById("webglcanvas");
+        canvas.width = 800;
+        canvas.height = 800;
+        canvas.addEventListener("wheel" , mouseWheel);
+
+        var gl = initWebGL(canvas);
+        initViewport(gl, canvas);
+        initMatrices(canvas);
+        var square = createSquare(gl);
+        initShader(gl);
+        initTexture(gl);
+        run(gl, square);
+      }
+    );
+
+    </script>
+  </head>
+
+  <body>
+    <canvas id="webglcanvas" style="border: none;" width="500" height="500"></canvas>
+    <p>Use mouse wheel to zoom up/down</p>
+  </body>
+  </html>
